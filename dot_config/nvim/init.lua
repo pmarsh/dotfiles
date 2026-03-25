@@ -10,7 +10,7 @@ vim.opt.smartindent = true
 vim.opt.termguicolors = true
 vim.opt.cursorline = true
 vim.opt.wrap = false
-vim.opt.clipboard = "unnamedplus"  -- Integrate with Windows clipboard
+vim.opt.clipboard = "unnamedplus"
 
 vim.g.mapleader = " "
 vim.opt.updatetime = 300
@@ -30,39 +30,27 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
-    -- Theme
     { "morhetz/gruvbox" },
 
-    -- Treesitter
     { "nvim-treesitter/nvim-treesitter", build = ":TSUpdate" },
-    -- Icons
     { "nvim-tree/nvim-web-devicons", lazy = true },
-    { "echasnovski/mini.icons", version = false },
-    -- LSP + Completion
+
+    -- LSP + tooling
     { "neovim/nvim-lspconfig" },
+    { "williamboman/mason.nvim", config = true },
+    { "williamboman/mason-lspconfig.nvim" },
+
+    -- Completion
     { "hrsh7th/nvim-cmp" },
     { "hrsh7th/cmp-nvim-lsp" },
     { "L3MON4D3/LuaSnip" },
 
-    -- Formatting & Linting
-    { "nvimtools/none-ls.nvim" },
-
-    -- File Explorer
+    -- UI / tools
     { "nvim-tree/nvim-tree.lua" },
-
-    -- Status Line
     { "nvim-lualine/lualine.nvim" },
-
-    -- Telescope (Fuzzy Finder + Live Grep)
     { "nvim-telescope/telescope.nvim", dependencies = { "nvim-lua/plenary.nvim" } },
-
-    -- Git Integration
     { "lewis6991/gitsigns.nvim" },
-
-    -- Which-key for leader hints
     { "folke/which-key.nvim" },
-
-    -- Commenting
     { "numToStr/Comment.nvim", config = true },
 })
 
@@ -73,111 +61,151 @@ vim.cmd("colorscheme gruvbox")
 require("lualine").setup({ options = { theme = "gruvbox" } })
 
 -- ==========================
---  NvimTree Setup
+--  NvimTree
 -- ==========================
 require("nvim-tree").setup()
-vim.keymap.set("n", "<leader>e", ":NvimTreeToggle<CR>", { noremap = true, silent = true })
+vim.keymap.set("n", "<leader>e", ":NvimTreeToggle<CR>", { silent = true })
 
 -- ==========================
---  Telescope Setup
+--  Telescope
 -- ==========================
-local telescope = require("telescope")
-telescope.setup({
-    defaults = { layout_strategy = "vertical", layout_config = { height = 0.9 } },
+require("telescope").setup({
+    defaults = {
+        layout_strategy = "vertical",
+        layout_config = { height = 0.9 },
+    },
 })
 
 -- ==========================
---  Gitsigns Setup
+--  Gitsigns
 -- ==========================
 require("gitsigns").setup({
-    signs = {
-        add          = { text = "▎" },
-        change       = { text = "▎" },
-        delete       = { text = "契" },
-        topdelete    = { text = "契" },
-        changedelete = { text = "▎" },
-    },
     current_line_blame = true,
-    current_line_blame_opts = { delay = 400, virt_text_pos = "eol" },
 })
 
 -- ==========================
---  Which-key Setup (Latest Spec)
+--  Which-key
 -- ==========================
 local wk = require("which-key")
-wk.setup({})
+wk.setup()
 
-wk.add({ -- using add() is preferred in 1.6+
-    { "<leader>e", "<cmd>NvimTreeToggle<cr>", desc = "File Explorer" },
+wk.add({
+    { "<leader>e", "<cmd>NvimTreeToggle<cr>", desc = "Explorer" },
     { "<leader>f", group = "Find" },
     { "<leader>ff", "<cmd>Telescope find_files<cr>", desc = "Files" },
-    { "<leader>fg", "<cmd>Telescope live_grep<cr>", desc = "Live Grep" },
-    { "<leader>fb", "<cmd>Telescope buffers<cr>", desc = "Buffers" },
-    { "<leader>fh", "<cmd>Telescope help_tags<cr>", desc = "Help" },
+    { "<leader>fg", "<cmd>Telescope live_grep<cr>", desc = "Grep" },
 })
 
 -- ==========================
---  Diagnostics Setup
+--  Diagnostics UI
 -- ==========================
 vim.diagnostic.config({
     virtual_text = false,
     signs = true,
     underline = true,
-    update_in_insert = false,
     severity_sort = true,
 })
 
 vim.api.nvim_create_autocmd("CursorHold", {
     callback = function()
-        vim.diagnostic.open_float(nil, { focusable = false, border = "rounded" })
+        vim.diagnostic.open_float(nil, { border = "rounded", focusable = false })
     end,
 })
 
 -- ==========================
---  LSP Setup
+--  Mason (tool install)
 -- ==========================
-local lspconfig = require("lspconfig")
+require("mason-lspconfig").setup({
+    ensure_installed = {
+        "pyright",
+        "ruff",
+        "ts_ls",
+        "jsonls",
+    },
+})
+
+-- ==========================
+--  LSP Setup (modern API)
+-- ==========================
 local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
--- Python
-lspconfig.pyright.setup({ capabilities = capabilities })
+-- global defaults
+vim.lsp.config("*", {
+    capabilities = capabilities,
+})
 
--- JavaScript / TypeScript
-lspconfig.ts_ls.setup({ capabilities = capabilities })
+-- python: use ruff for formatting, pyright for types
+vim.lsp.config("pyright", {
+    settings = {
+        python = {
+            analysis = {
+                typeCheckingMode = "basic",
+            },
+        },
+    },
+})
 
--- JSON
-lspconfig.jsonls.setup({ capabilities = capabilities })
+-- enable servers
+vim.lsp.enable({
+    "ruff",
+    "pyright",
+    "ts_ls",
+    "jsonls",
+})
 
 -- ==========================
---  Completion Setup
+--  LSP Keymaps
+-- ==========================
+vim.api.nvim_create_autocmd("LspAttach", {
+    callback = function(args)
+        local map = function(lhs, rhs)
+            vim.keymap.set("n", lhs, rhs, { buffer = args.buf })
+        end
+
+        map("gd", vim.lsp.buf.definition)
+        map("gr", vim.lsp.buf.references)
+        map("K", vim.lsp.buf.hover)
+        map("<leader>rn", vim.lsp.buf.rename)
+        map("<leader>ca", vim.lsp.buf.code_action)
+    end,
+})
+
+-- ==========================
+--  Completion (cmp)
 -- ==========================
 local cmp = require("cmp")
+
 cmp.setup({
-    snippet = { expand = function(args) require("luasnip").lsp_expand(args.body) end },
+    snippet = {
+        expand = function(args)
+            require("luasnip").lsp_expand(args.body)
+        end,
+    },
     mapping = cmp.mapping.preset.insert({
         ["<CR>"] = cmp.mapping.confirm({ select = true }),
         ["<Tab>"] = cmp.mapping.select_next_item(),
         ["<S-Tab>"] = cmp.mapping.select_prev_item(),
+        ["<C-Space>"] = cmp.mapping.complete(),
     }),
-    sources = cmp.config.sources({ { name = "nvim_lsp" } }),
+    sources = {
+        { name = "nvim_lsp" },
+    },
 })
 
 -- ==========================
---  Auto Formatting (none-ls)
+--  Format on Save (native)
 -- ==========================
-local null_ls = require("null-ls")
-null_ls.setup({
-    sources = {
-        null_ls.builtins.formatting.black,      -- Python
-        null_ls.builtins.formatting.prettier,   -- JS / TS / JSON
-    },
-    on_attach = function(client, bufnr)
-        if client.supports_method("textDocument/formatting") then
-            vim.api.nvim_create_autocmd("BufWritePre", {
-                buffer = bufnr,
-                callback = function() vim.lsp.buf.format({ async = false }) end,
-            })
-        end
+vim.api.nvim_create_autocmd("BufWritePre", {
+    callback = function(args)
+        vim.lsp.buf.format({
+            bufnr = args.buf,
+            timeout_ms = 2000,
+            filter = function(client)
+                if vim.bo[args.buf].filetype == "python" then
+                    return client.name == "ruff"
+                end
+                return true
+            end,
+        })
     end,
 })
-
