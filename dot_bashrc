@@ -131,7 +131,7 @@ export PATH="$PATH:/opt/nvim/"
 export VOLTA_HOME="$HOME/.volta"
 export PATH="$VOLTA_HOME/bin:$PATH"
 
-if [ -z "$TMUX" ]; then
+if [ -z "$TMUX" ] && [! -f /.dockerenv ]; then
   tmux attach -t main || tmux new -s main
 fi
 
@@ -140,3 +140,13 @@ fi
 export PATH=/home/pmarsh/.opencode/bin:$PATH
 # enable LSP in claude code
 export ENABLE_LSP_TOOL=1
+export AZCOPY_AUTO_LOGIN_TYPE=AZCLI
+
+ccode() {
+  export CLAUDE_ENV_FILE="$PWD/.claude-env.sh"
+  claude "$@"
+}
+prod-ccode() {
+  export CLAUDE_ENV_FILE="$PWD/.claude-env-prod.sh"
+  claude "$@"
+}
